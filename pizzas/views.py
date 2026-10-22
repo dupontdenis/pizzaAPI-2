@@ -9,61 +9,38 @@ from .serializers import PizzaSerializer
 
 class PizzaListApi(APIView):
     def get(self, request):
-        pizzas = (
-            Pizza.objects
-            .prefetch_related("ingredients")
-            .order_by("id")
-        )
-
+        pizzas = Pizza.objects.all()
 
         raw = request.query_params.get("ingredients", "")
         mode = request.query_params.get("mode", "or").lower()
 
+        names = [
+            name.strip()
+            for name in raw.split(",")
+            if name.strip()
+        ]
 
-        if raw:
-            names = [
-                name.strip()
-                for name in raw.split(",")
-                if name.strip()
-            ]
+        if names:
+            if mode == "and":
+                for name in names:
+                    pizzas = pizzas.filter(
+                        ingredients__name=name
+                    )
+            else:
+                pizzas = pizzas.filter(
+                    ingredients__name__in=names
+                )
 
+            pizzas = pizzas.distinct()
 
-            if names:
-                filtered_pizzas = []
-
-
-                for pizza in pizzas:
-                    ingredient_names = [
-                        ingredient.name
-                        for ingredient in pizza.ingredients.all()
-                    ]
-
-
-                    if mode == "and":
-                        matches = all(
-                            name in ingredient_names
-                            for name in names
-                        )
-                    else:
-                        matches = any(
-                            name in ingredient_names
-                            for name in names
-                        )
-
-
-                    if matches:
-                        filtered_pizzas.append(pizza)
-
-
-                pizzas = filtered_pizzas
-
+        pizzas = (
+            pizzas
+            .prefetch_related("ingredients")
+            .order_by("id")
+        )
 
         serializer = PizzaSerializer(pizzas, many=True)
         return Response(serializer.data)
-
-
-
-
 class PizzaDetailApi(APIView):
     def get(self, request, pk):
         pizza = get_object_or_404(
